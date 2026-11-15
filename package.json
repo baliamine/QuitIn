@@ -1,0 +1,26 @@
+{
+  "name": "quitin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QUITIN - a professional social network for developers and tech professionals (Next.js + NestJS + Prisma).",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "dev:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-check.ps1",
+    "dev:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-up.ps1",
+    "dev:down": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-down.ps1",
+    "dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-status.ps1",
+    "dev:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-logs.ps1",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "prisma:generate": "npm --prefix backend run prisma:generate",
+    "prisma:migrate": "npm --prefix backend run prisma:migrate",
+    "prisma:push": "npm --prefix backend run prisma:push",
+    "prisma:seed": "npm --prefix backend run prisma:seed",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test:backend": "npm --prefix backend test",
+    "test:e2e": "npm --prefix frontend run test:e2e",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build"
+  }
+}

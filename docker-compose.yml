@@ -1,0 +1,30 @@
+# Convenience services for local QUITIN development.
+#
+# IMPORTANT: this container publishes PostgreSQL on 127.0.0.1:5432, which is
+# the same port as a native Windows PostgreSQL service. Use ONE of them:
+#   - native service (recommended if already installed), or
+#   - this container (only when the native service is stopped).
+# The development manager (npm run dev:up) prefers an already running server
+# and never starts a second cluster on another port.
+# Start with: docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: quitin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: quitin
+    ports:
+      - '5432:5432'
+    volumes:
+      - quitin-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d quitin']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  quitin-pgdata:

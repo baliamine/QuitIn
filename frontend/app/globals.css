@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ---- Dark theme (default) ---- */
+  :root {
+    color-scheme: dark;
+
+    --c-background: 9 9 11; /* #09090b */
+    --c-surface: 16 16 19; /* #101013 */
+    --c-elevated: 23 23 27; /* #17171b */
+    --c-elevated-hover: 32 32 39; /* #202027 */
+    --c-border: 38 38 44; /* #26262c */
+    --c-strong: 63 63 70; /* #3f3f46 */
+    --c-foreground: 244 244 245; /* zinc-100 */
+    --c-muted: 161 161 170; /* zinc-400 */
+    --c-subtle: 113 113 122; /* zinc-500 */
+    --c-danger: 248 113 113; /* red-400 */
+    --c-success: 110 231 183; /* emerald-300 */
+    --scroll-thumb: #2c2c33;
+  }
+
+  /* ---- Light theme (enabled by adding class="light" to <html>) ---- */
+  html.light {
+    color-scheme: light;
+
+    --c-background: 250 250 250; /* zinc-50 */
+    --c-surface: 255 255 255; /* white */
+    --c-elevated: 244 244 245; /* zinc-100 */
+    --c-elevated-hover: 228 228 231; /* zinc-200 */
+    --c-border: 228 228 231; /* zinc-200 */
+    --c-strong: 212 212 216; /* zinc-300 */
+    --c-foreground: 24 24 27; /* zinc-900 */
+    --c-muted: 82 82 91; /* zinc-600 */
+    --c-subtle: 113 113 122; /* zinc-500 */
+    --c-danger: 220 38 38; /* red-600 */
+    --c-success: 5 150 105; /* emerald-600 */
+    --scroll-thumb: #c9c9cf;
+  }
+
+  html,
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  body {
+    @apply min-h-screen;
+  }
+
+  ::selection {
+    @apply bg-accent/30 text-foreground;
+  }
+
+  /* Custom scrollbar (follows the active theme) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scroll-thumb);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70;
+  }
+}
