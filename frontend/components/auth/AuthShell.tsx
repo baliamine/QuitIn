@@ -1,6 +1,6 @@
-import Link from 'next/link';
-import { ThemeToggle } from '@/components/ui/ThemeToggle';
-import Image from 'next/image';
+import Link from "next/link";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import Image from "next/image";
 
 export function AuthShell({
   title,
@@ -16,7 +16,10 @@ export function AuthShell({
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       <aside className="hidden border-r border-border bg-surface px-12 py-12 lg:flex lg:flex-col">
-        <Link href="/" className="text-2xl font-bold tracking-tight text-foreground">
+        <Link
+          href="/"
+          className="text-2xl font-bold tracking-tight text-foreground"
+        >
           QUITIN
         </Link>
 
@@ -26,26 +29,30 @@ export function AuthShell({
               Grow your tech career, together.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              A focused space to build your profile, connect with peers, and discover new opportunities.
+              A focused space to build your profile, connect with peers, and
+              discover new opportunities.
             </p>
           </div>
 
           <div className="mt-10 w-full max-w-lg">
-          <Image
-  src="/img/jobHunt02.png"
-  alt="Grow your tech career illustrations"
-  width={1040}
-  height={720}
-  className="h-auto w-full rounded-2xl object-contain"
-  priority
-/>
+            <Image
+              src="/img/jobHunt.png"
+              alt="Grow your tech career illustrations"
+              width={1040}
+              height={720}
+              className="h-auto w-full rounded-2xl object-contain"
+              priority
+            />
           </div>
         </div>
       </aside>
 
       <main className="relative flex min-h-screen flex-col px-5 py-8 sm:px-10">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold tracking-tight text-foreground lg:hidden">
+          <Link
+            href="/"
+            className="text-xl font-bold tracking-tight text-foreground lg:hidden"
+          >
             QUITIN
           </Link>
           <div className="ml-auto">
@@ -65,7 +72,9 @@ export function AuthShell({
           </div>
         </div>
 
-        {footer && <div className="text-center text-xs text-subtle">{footer}</div>}
+        {footer && (
+          <div className="text-center text-xs text-subtle">{footer}</div>
+        )}
       </main>
     </div>
   );
