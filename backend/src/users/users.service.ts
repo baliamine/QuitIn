@@ -14,6 +14,7 @@ import { UpdateProfileDto, ExperienceDto, EducationDto } from './dto/profile.dto
 export const PUBLIC_USER_SELECT = {
   id: true,
   username: true,
+  role: true,
   createdAt: true,
   lastActiveAt: true,
   profile: {
@@ -31,6 +32,7 @@ export const PUBLIC_USER_SELECT = {
 const USER_CARD_SELECT = {
   id: true,
   username: true,
+  role: true,
   lastActiveAt: true,
   profile: {
     select: { avatarUrl: true, headline: true, bio: true, location: true, visibility: true },
@@ -374,6 +376,19 @@ export class UsersService {
     };
   }
 
+  private async assertNoBlock(a: string, b: string) {
+    const block = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: a, blockedId: b },
+          { blockerId: b, blockedId: a },
+        ],
+      },
+      select: { id: true },
+    });
+    if (block) throw new ForbiddenException('You can no longer interact with this user');
+  }
+
   async acceptFollowRequest(userId: string, requestId: string) {
     const request = await this.prisma.followRequest.findUnique({
       where: { id: requestId },
@@ -381,6 +396,7 @@ export class UsersService {
     if (!request || request.targetId !== userId) {
       throw new NotFoundException('Follow request not found');
     }
+    await this.assertNoBlock(userId, request.requesterId);
     await this.prisma.$transaction([
       this.prisma.follow.upsert({
         where: {
@@ -410,6 +426,7 @@ export class UsersService {
     if (!request || request.targetId !== userId) {
       throw new NotFoundException('Follow request not found');
     }
+    await this.assertNoBlock(userId, request.requesterId);
     await this.prisma.followRequest.delete({ where: { id: request.id } });
     return { success: true };
   }
@@ -507,13 +524,26 @@ export class UsersService {
       select: { id: true },
     });
     if (!user) throw new NotFoundException('User not found');
+    if (user.id !== currentUserId) {
+      throw new ForbiddenException('You can only view your own followers');
+    }
 
     const rows = await this.prisma.follow.findMany({
       where: { followingId: user.id },
       include: { follower: { select: USER_CARD_SELECT } },
       orderBy: { createdAt: 'desc' },
     });
-    return { users: rows.map((r) => r.follower) };
+    const following = await this.prisma.follow.findMany({
+      where: {
+        followerId: currentUserId,
+        followingId: { in: rows.map((r) => r.follower.id) },
+      },
+      select: { followingId: true },
+    });
+    const followingIds = new Set(following.map((f) => f.followingId));
+    return {
+      users: rows.map((r) => ({ ...r.follower, isFollowing: followingIds.has(r.follower.id) })),
+    };
   }
 
   async following(username: string, currentUserId: string) {
@@ -522,13 +552,18 @@ export class UsersService {
       select: { id: true },
     });
     if (!user) throw new NotFoundException('User not found');
+    if (user.id !== currentUserId) {
+      throw new ForbiddenException('You can only view your own following list');
+    }
 
     const rows = await this.prisma.follow.findMany({
       where: { followerId: user.id },
       include: { following: { select: USER_CARD_SELECT } },
       orderBy: { createdAt: 'desc' },
     });
-    return { users: rows.map((r) => r.following) };
+    return {
+      users: rows.map((r) => ({ ...r.following, isFollowing: true })),
+    };
   }
 
   private assertDates(start?: string, end?: string) {

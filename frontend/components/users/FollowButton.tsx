@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { usersService } from '@/lib/services';
@@ -10,18 +10,27 @@ export function FollowButton({
   initialFollowing,
   initialRequested = false,
   size = 'sm',
+  followLabel = 'Follow',
+  followingLabel = 'Following',
   onChange,
 }: {
   username: string;
   initialFollowing: boolean;
   initialRequested?: boolean;
   size?: 'sm' | 'md';
+  followLabel?: string;
+  followingLabel?: string;
   onChange?: (state: { following: boolean; requested: boolean }) => void;
 }) {
   const toast = useToast();
   const [following, setFollowing] = useState(initialFollowing);
   const [requested, setRequested] = useState(initialRequested);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setFollowing(initialFollowing);
+    setRequested(initialRequested);
+  }, [initialFollowing, initialRequested]);
 
   async function toggle() {
     setLoading(true);
@@ -49,7 +58,7 @@ export function FollowButton({
         void toggle();
       }}
     >
-      {following ? 'Following' : requested ? 'Requested' : 'Follow'}
+      {following ? followingLabel : requested ? 'Requested' : followLabel}
     </Button>
   );
 }

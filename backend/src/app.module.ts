@@ -12,6 +12,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { UploadModule } from './upload/upload.module';
 import { CallsModule } from './calls/calls.module';
+import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { validateEnv } from './common/config/env.validation';
@@ -29,6 +30,7 @@ import { validateEnv } from './common/config/env.validation';
     AiModule,
     UploadModule,
     CallsModule,
+    JobsModule,
     HealthModule,
   ],
   providers: [

@@ -17,6 +17,7 @@ interface FormState {
   username: string;
   password: string;
   confirmPassword: string;
+  role: 'JOBSEEKER' | 'COMPANY';
 }
 
 function passwordScore(password: string) {
@@ -48,6 +49,7 @@ export function RegisterForm() {
     username: '',
     password: '',
     confirmPassword: '',
+    role: 'JOBSEEKER',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -128,6 +130,33 @@ export function RegisterForm() {
           error={errors.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
+
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-foreground">I am joining as</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: 'JOBSEEKER', label: 'Job seeker', hint: 'Find and apply to jobs' },
+                { value: 'COMPANY', label: 'Company', hint: 'Post and manage jobs' },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setForm({ ...form, role: option.value })}
+                className={cn(
+                  'rounded-lg border p-3 text-left transition-colors',
+                  form.role === option.value
+                    ? 'border-accent bg-accent/10'
+                    : 'border-border bg-elevated hover:border-strong',
+                )}
+              >
+                <span className="block text-sm font-medium text-foreground">{option.label}</span>
+                <span className="block text-xs text-subtle">{option.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">

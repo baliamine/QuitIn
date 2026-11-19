@@ -161,6 +161,16 @@ export class CallsService {
       });
     }
 
+    // Blocking prevents unwanted invitations in either direction.
+    const blocks = await this.prisma.block.findMany({
+      where: {
+        OR: [{ blockerId: hostId }, { blockedId: hostId }],
+      },
+      select: { blockerId: true, blockedId: true },
+    });
+    const blocked = new Set(blocks.map((b) => (b.blockerId === hostId ? b.blockedId : b.blockerId)));
+    const invitedIds = participantIds.filter((id) => !blocked.has(id));
+
     const meeting = await this.prisma.meeting.create({
       data: {
         hostId,
@@ -171,7 +181,7 @@ export class CallsService {
         participants: {
           create: [
             { userId: hostId },
-            ...participantIds.map((userId) => ({ userId })),
+            ...invitedIds.map((userId) => ({ userId })),
           ],
         },
       },
@@ -182,7 +192,7 @@ export class CallsService {
     });
 
     await Promise.all(
-      participantIds.map((userId) =>
+      invitedIds.map((userId) =>
         this.notifications.create(userId, {
           type: 'MEETING',
           actorId: hostId,

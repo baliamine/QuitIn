@@ -1,3 +1,46 @@
+export type UserRole = 'JOBSEEKER' | 'COMPANY';
+export type JobType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP';
+export type JobStatus = 'OPEN' | 'CLOSED';
+export type ApplicationStatus = 'PENDING' | 'REVIEWED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+
+export interface JobCompany {
+  id: string;
+  username: string;
+  profile: {
+    avatarUrl: string | null;
+    headline: string | null;
+    company: string | null;
+    location: string | null;
+  } | null;
+}
+
+export interface Job {
+  id: string;
+  companyId?: string;
+  company: JobCompany;
+  title: string;
+  description: string;
+  location: string;
+  type: JobType;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  status: JobStatus;
+  createdAt: string;
+  updatedAt?: string;
+  _count?: { applications: number };
+  applications?: { id: string; status: ApplicationStatus }[];
+  myApplication?: { id: string; status: ApplicationStatus } | null;
+}
+
+export interface JobApplication {
+  id: string;
+  status: ApplicationStatus;
+  coverLetter: string | null;
+  createdAt: string;
+  job?: Job;
+  applicant?: User;
+}
+
 export type ProfileVisibility = 'PUBLIC' | 'PRIVATE';
 export type MessagingPermission = 'EVERYONE' | 'FOLLOWERS';
 export type PostVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
@@ -65,6 +108,7 @@ export interface User {
   id: string;
   email?: string;
   username: string;
+  role?: UserRole;
   name?: string;
   emailVerifiedAt?: string | null;
   lastActiveAt?: string | null;
@@ -167,7 +211,13 @@ export type NotificationType =
   | 'FOLLOW_REQUEST'
   | 'FOLLOW_ACCEPTED'
   | 'CALL'
-  | 'MEETING';
+  | 'MEETING'
+  | 'JOB_APPLICATION'
+  | 'JOB_APPLICATION_UPDATE'
+  | 'JOB_APPLICATION_ACCEPTED'
+  | 'JOB_APPLICATION_REJECTED'
+  | 'INTERVIEW_INVITATION'
+  | 'JOB_OFFER';
 
 export interface Notification {
   id: string;

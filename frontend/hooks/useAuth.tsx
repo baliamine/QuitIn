@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { authService } from '@/lib/services';
 import { disconnectSocket } from '@/lib/socket';
 import type { User } from '@/types';
@@ -24,6 +24,7 @@ interface AuthContextValue {
     username: string;
     password: string;
     confirmPassword: string;
+    role?: 'JOBSEEKER' | 'COMPANY';
   }) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -35,6 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
+  // Public auth pages don't need a session check; an unauthenticated /auth/me
+  // would only produce a noisy 401 in the browser console.
+  const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(
+    pathname,
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -48,8 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isAuthPage) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, isAuthPage]);
 
   const login = useCallback<AuthContextValue['login']>(
     async (input) => {

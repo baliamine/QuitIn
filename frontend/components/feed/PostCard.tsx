@@ -12,7 +12,7 @@ import { useClickOutside } from '@/hooks/useClickOutside';
 import { postsService } from '@/lib/services';
 import { useAuth } from '@/hooks/useAuth';
 import { absoluteUrl, cn, formatBytes, timeAgo } from '@/lib/utils';
-import type { Comment, Post, ReactionType } from '@/types';
+import type { Comment, Post, ReactionType, User } from '@/types';
 
 const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
   { type: 'LIKE', emoji: '👍', label: 'Like' },
@@ -325,6 +325,11 @@ export function PostCard({
   const [repostText, setRepostText] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [reactorsOpen, setReactorsOpen] = useState(false);
+  const [reactors, setReactors] = useState<
+    { type: ReactionType; user: User; createdAt: string }[]
+  >([]);
+  const [loadingReactors, setLoadingReactors] = useState(false);
 
   const isOwn = user?.id === post.author.id;
   const rootPost = post.repostOf ?? null;
@@ -380,6 +385,19 @@ export function PostCard({
       setMyReaction(result.myReaction);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not react to this post');
+    }
+  }
+
+  async function openReactors() {
+    setReactorsOpen(true);
+    setLoadingReactors(true);
+    try {
+      const res = await postsService.reactors(post.id);
+      setReactors(res.reactors);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load reactions');
+    } finally {
+      setLoadingReactors(false);
     }
   }
 
@@ -689,7 +707,12 @@ export function PostCard({
 
           {(reactionCount > 0 || commentCount > 0) && (
             <div className="mt-3 flex items-center justify-between border-b border-border pb-2 text-xs text-subtle">
-              <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void openReactors()}
+                className="flex items-center gap-1 hover:underline"
+                title="See who reacted"
+              >
                 {summaryReactions.length > 0 ? (
                   <>
                     {summaryReactions.map(([type, count]) => (
@@ -702,7 +725,7 @@ export function PostCard({
                 ) : (
                   <span>{reactionCount} reactions</span>
                 )}
-              </span>
+              </button>
               <span>
                 {commentCount > 0 ? `${commentCount} comment${commentCount === 1 ? '' : 's'}` : ''}
               </span>
@@ -879,6 +902,49 @@ export function PostCard({
           )}
         </div>
       </div>
+
+      <Modal
+        open={reactorsOpen}
+        onClose={() => setReactorsOpen(false)}
+        title="Reactions"
+        description="People who reacted to this post"
+      >
+        {loadingReactors ? (
+          <div className="flex justify-center py-6">
+            <Spinner />
+          </div>
+        ) : reactors.length === 0 ? (
+          <EmptyState title="No reactions yet" description="Be the first to react to this post." />
+        ) : (
+          <div className="space-y-2">
+            {reactors.map((reaction, index) => (
+              <Link
+                key={`${reaction.user.id}-${reaction.type}-${index}`}
+                href={`/profile/${reaction.user.username}`}
+                onClick={() => setReactorsOpen(false)}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-elevated"
+              >
+                <Avatar
+                  src={reaction.user.profile?.avatarUrl}
+                  name={reaction.user.username}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    @{reaction.user.username}
+                  </span>
+                  <span className="block text-xs text-subtle">
+                    {REACTIONS.find((r) => r.type === reaction.type)?.label ?? reaction.type}
+                  </span>
+                </span>
+                <span aria-hidden className="text-lg">
+                  {REACTION_EMOJI[reaction.type] ?? '👍'}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={editOpen}

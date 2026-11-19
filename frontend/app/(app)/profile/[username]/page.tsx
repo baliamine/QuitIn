@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/Button';
 import { Badge, EmptyState, Spinner } from '@/components/ui/Feedback';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Input';
+import { UserActionsMenu } from '@/components/users/UserActionsMenu';
 import { useToast } from '@/components/ui/Toast';
 import { PostCard } from '@/components/feed/PostCard';
 import { FollowButton } from '@/components/users/FollowButton';
+import { UserCard } from '@/components/users/UserCard';
 import { postsService, usersService } from '@/lib/services';
 import { useAuth } from '@/hooks/useAuth';
 import { formatMonthYear } from '@/lib/utils';
@@ -19,15 +21,23 @@ export default function ProfilePage() {
   const params = useParams<{ username: string }>();
   const username = params.username;
   const router = useRouter();
+  const toast = useToast();
   const { user: me } = useAuth();
 
   const [profile, setProfile] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [connections, setConnections] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [tab, setTab] = useState<'posts' | 'about'>('posts');
+  const [tab, setTab] = useState<'posts' | 'about' | 'followers' | 'following'>('posts');
+
 
   const isSelf = me?.username === username;
+
+  useEffect(() => {
+    if (!isSelf && (tab === 'followers' || tab === 'following')) setTab('posts');
+  }, [isSelf, tab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +58,45 @@ export default function ProfilePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!isSelf || (tab !== 'followers' && tab !== 'following')) return;
+    let active = true;
+    setConnectionsLoading(true);
+    const request = tab === 'followers' ? usersService.followers : usersService.following;
+    request(username)
+      .then((res) => {
+        if (active) {
+          setConnections(
+            tab === 'following'
+              ? res.users.map((connection) => ({ ...connection, isFollowing: true }))
+              : res.users,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) setConnections([]);
+      })
+      .finally(() => {
+        if (active) setConnectionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isSelf, tab, username]);
+
+  function setBlocked(block: boolean) {
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            isBlockedByMe: block,
+            isFollowing: false,
+            canMessage: !block,
+          }
+        : current,
+    );
+  }
 
   if (loading) {
     return (
@@ -86,33 +135,69 @@ export default function ProfilePage() {
                   Edit profile
                 </Button>
               ) : profile.hasBlockedMe ? (
-                <Button variant="danger" size="md" disabled>
-                  You blocked this person
+                <Button variant="secondary" size="md" disabled>
+                  Profile unavailable
                 </Button>
               ) : (
-                <div className="flex gap-2">
-                  {profile.canMessage === false && !profile.isFollowing && !profile.isRequested && (
-                    <p className="text-xs text-muted">Only people who follow @{profile.username} can message them.</p>
+                <div className="flex items-center gap-2">
+                  {!profile.isBlockedByMe && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        disabled={profile.canMessage === false}
+                        onClick={() =>
+                          router.push(`/messages?to=${encodeURIComponent(profile.username)}`)
+                        }
+                      >
+                        Message
+                      </Button>
+                      <FollowButton
+                        username={profile.username}
+                        initialFollowing={!!profile.isFollowing}
+                        initialRequested={!!profile.isRequested}
+                        size="md"
+                        onChange={(state) =>
+                          setProfile((current) => {
+                            if (!current) return current;
+                            const wasFollowing = !!current.isFollowing;
+                            const followerDelta =
+                              Number(state.following) - Number(wasFollowing);
+                            return {
+                              ...current,
+                              isFollowing: state.following,
+                              isRequested: state.requested,
+                              _count: current._count
+                                ? {
+                                    ...current._count,
+                                    followers: Math.max(
+                                      0,
+                                      current._count.followers + followerDelta,
+                                    ),
+                                  }
+                                : current._count,
+                            };
+                          })
+                        }
+                      />
+                    </>
                   )}
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={() => router.push(`/messages?with=${profile.username}`)}
-                  >
-                    Message
-                  </Button>
-                  <FollowButton
+                  <UserActionsMenu
                     username={profile.username}
-                    initialFollowing={!!profile.isFollowing}
-                    initialRequested={!!profile.isRequested}
-                    size="md"
+                    blocked={!!profile.isBlockedByMe}
+                    onBlockChanged={setBlocked}
                   />
                 </div>
               )}
             </div>
 
             <div className="mt-4">
-              <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
+                <Badge className="text-xs">
+                  {profile.role === 'COMPANY' ? 'Company' : 'Job seeker'}
+                </Badge>
+              </div>
               <p className="text-sm text-subtle">@{profile.username}</p>
               {profile.profile?.bio && (
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
@@ -135,22 +220,50 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              <div className="mt-4 flex gap-5 text-sm">
-                <span className="text-muted">
-                  <strong className="text-foreground">{profile._count?.followers ?? 0}</strong> followers
-                </span>
-                <span className="text-muted">
-                  <strong className="text-foreground">{profile._count?.following ?? 0}</strong> following
-                </span>
-                <span className="text-muted">
+              <div className="mt-4 flex flex-wrap gap-5 text-sm">
+                {isSelf ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setTab('followers')}
+                      className="text-muted hover:text-foreground"
+                    >
+                      <strong className="text-foreground">{profile._count?.followers ?? 0}</strong>{' '}
+                      followers
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTab('following')}
+                      className="text-muted hover:text-foreground"
+                    >
+                      <strong className="text-foreground">{profile._count?.following ?? 0}</strong>{' '}
+                      following
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted">
+                      <strong className="text-foreground">{profile._count?.followers ?? 0}</strong>{' '}
+                      followers
+                    </span>
+                    <span className="text-muted">
+                      <strong className="text-foreground">{profile._count?.following ?? 0}</strong>{' '}
+                      following
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setTab('posts')}
+                  className="text-muted hover:text-foreground"
+                >
                   <strong className="text-foreground">{profile._count?.posts ?? 0}</strong> posts
-                </span>
+                </button>
               </div>
 
               {!isSelf && !profile.isFollowing && profile.profile?.visibility === 'PRIVATE' && (
                 <div className="mt-4 rounded-xl border border-border bg-elevated px-4 py-3 text-sm text-muted">
-                  This profile is private. Follow @{profile.username} to see their posts and be able to
-                  message them.
+                  This profile is private. Only approved followers can see their posts.
                 </div>
               )}
             </div>
@@ -158,7 +271,10 @@ export default function ProfilePage() {
         </Card>
 
         <div className="flex gap-1 border-b border-border">
-          {(['posts', 'about'] as const).map((value) => (
+          {(isSelf
+            ? (['posts', 'about', 'followers', 'following'] as const)
+            : (['posts', 'about'] as const)
+          ).map((value) => (
             <button
               key={value}
               onClick={() => setTab(value)}
@@ -185,8 +301,32 @@ export default function ProfilePage() {
               />
             ))
           )
-        ) : (
+        ) : tab === 'about' ? (
           <AboutSection profile={profile} isSelf={isSelf} />
+        ) : connectionsLoading ? (
+          <div className="flex justify-center py-12">
+            <Spinner />
+          </div>
+        ) : connections.length === 0 ? (
+          <EmptyState
+            title={tab === 'followers' ? 'No followers yet' : 'Not following anyone'}
+            description={`@${profile.username} has no ${tab} yet.`}
+          />
+        ) : (
+          <Card>
+            <CardHeader title={tab === 'followers' ? 'Followers' : 'Following'} />
+            <div className="space-y-2">
+              {connections.map((connection) => (
+                <UserCard
+                  key={connection.id}
+                  user={connection}
+                  currentUsername={me?.username}
+                  followLabel={tab === 'followers' ? 'Follow back' : undefined}
+                  followingLabel="Unfollow"
+                />
+              ))}
+            </div>
+          </Card>
         )}
       </div>
 

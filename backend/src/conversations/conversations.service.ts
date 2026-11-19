@@ -401,7 +401,8 @@ export class ConversationsService {
           type: 'MESSAGE',
           actorId: currentUserId,
           entityId: conversationId,
-          message: 'sent you a message',
+          message: `sent you a message: ${content.slice(0, 80)}${content.length > 80 ? '…' : ''}`,
+          dedupe: false,
         }),
       ),
     );

@@ -8,7 +8,11 @@ import type {
   Conversation,
   Education,
   Experience,
+  ApplicationStatus,
   FollowRequest,
+  Job,
+  JobApplication,
+  JobType,
   Meeting,
   Message,
   Notification,
@@ -28,6 +32,7 @@ export const authService = {
     username: string;
     password: string;
     confirmPassword: string;
+    role?: 'JOBSEEKER' | 'COMPANY';
   }) {
     return api.post<{ user: User; emailVerificationSent: boolean }>('/auth/register', input);
   },
@@ -38,7 +43,7 @@ export const authService = {
     return api.post<{ success: boolean }>('/auth/logout');
   },
   async me() {
-    return api.get<{ user: User }>('/auth/me');
+    return api.get<{ user: User | null }>('/auth/me');
   },
   forgotPassword: (email: string) =>
     api.post<{ success: boolean; message: string; devResetToken?: string }>(
@@ -162,6 +167,63 @@ export const postsService = {
     ),
   deleteComment: (postId: string, commentId: string) =>
     api.delete<{ success: boolean }>(`/posts/${postId}/comments/${commentId}`),
+};
+
+export const jobsService = {
+  list: (params?: { q?: string; location?: string; type?: JobType; take?: number; skip?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set('q', params.q);
+    if (params?.location) qs.set('location', params.location);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.take) qs.set('take', String(params.take));
+    if (params?.skip) qs.set('skip', String(params.skip));
+    const query = qs.toString();
+    return api.get<{ jobs: Job[] }>(`/jobs${query ? `?${query}` : ''}`);
+  },
+  get: (id: string) => api.get<Job>(`/jobs/${id}`),
+  mine: () => api.get<{ jobs: Job[] }>('/jobs/me'),
+  myApplications: () => api.get<{ applications: JobApplication[] }>('/jobs/me/applications'),
+  create: (input: {
+    title: string;
+    description: string;
+    location: string;
+    type: JobType;
+    salaryMin?: number;
+    salaryMax?: number;
+  }) => api.post<Job>('/jobs', input),
+  update: (
+    id: string,
+    input: {
+      title?: string;
+      description?: string;
+      location?: string;
+      type?: JobType;
+      salaryMin?: number | null;
+      salaryMax?: number | null;
+      status?: 'OPEN' | 'CLOSED';
+    },
+  ) => api.patch<Job>(`/jobs/${id}`, input),
+  remove: (id: string) => api.delete<{ success: boolean }>(`/jobs/${id}`),
+  applicants: (id: string, status?: ApplicationStatus) =>
+    api.get<{ applications: JobApplication[] }>(
+      `/jobs/${id}/applications${status ? `?status=${status}` : ''}`,
+    ),
+  apply: (id: string, coverLetter?: string) =>
+    api.post<JobApplication>(`/jobs/${id}/apply`, { coverLetter }),
+  withdraw: (id: string) => api.delete<{ success: boolean }>(`/jobs/${id}/apply`),
+  setApplicationStatus: (jobId: string, applicationId: string, status: ApplicationStatus) =>
+    api.patch<JobApplication>(`/jobs/${jobId}/applications/${applicationId}`, { status }),
+  inviteToInterview: (
+    jobId: string,
+    applicationId: string,
+    input: { message: string; scheduledAt?: string },
+  ) =>
+    api.post<{ success: boolean }>(
+      `/jobs/${jobId}/applications/${applicationId}/interview`,
+      input,
+    ),
+  sendOffer: (jobId: string, applicationId: string, input: { message: string }) =>
+    api.post<{ success: boolean }>(`/jobs/${jobId}/applications/${applicationId}/offer`, input),
 };
 
 export const conversationsService = {

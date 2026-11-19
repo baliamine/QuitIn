@@ -10,6 +10,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  JOBSEEKER
+  COMPANY
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
 enum NotificationType {
   LIKE
   COMMENT
@@ -21,6 +46,12 @@ enum NotificationType {
   FOLLOW_ACCEPTED
   CALL
   MEETING
+  JOB_APPLICATION
+  JOB_APPLICATION_UPDATE
+  JOB_APPLICATION_ACCEPTED
+  JOB_APPLICATION_REJECTED
+  INTERVIEW_INVITATION
+  JOB_OFFER
 }
 
 enum ReactionType {
@@ -93,6 +124,7 @@ model User {
   id              String    @id @default(cuid())
   email           String    @unique
   username        String    @unique
+  role            UserRole  @default(JOBSEEKER)
   passwordHash    String    @map("password_hash")
   emailVerifiedAt DateTime? @map("email_verified_at")
   lastActiveAt    DateTime? @map("last_active_at")
@@ -124,6 +156,8 @@ model User {
   callsReceived   Call[]                  @relation("Callee")
   meetingsHosted  Meeting[]               @relation("MeetingHost")
   meetingAttendance MeetingParticipant[]
+  jobs            Job[]                   @relation("CompanyJobs")
+  applications    JobApplication[]        @relation("JobApplicant")
 
   @@index([username])
   @@map("users")
@@ -450,6 +484,45 @@ model MessageReaction {
   @@unique([messageId, userId])
   @@index([userId])
   @@map("message_reactions")
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  title       String
+  description String
+  location    String
+  type        JobType
+  salaryMin   Int?      @map("salary_min")
+  salaryMax   Int?      @map("salary_max")
+  status      JobStatus @default(OPEN)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  company      User             @relation("CompanyJobs", fields: [companyId], references: [id], onDelete: Cascade)
+  applications JobApplication[]
+
+  @@index([companyId])
+  @@index([status, createdAt])
+  @@map("jobs")
+}
+
+model JobApplication {
+  id          String            @id @default(cuid())
+  jobId       String            @map("job_id")
+  applicantId String            @map("applicant_id")
+  coverLetter String?           @map("cover_letter")
+  status      ApplicationStatus @default(PENDING)
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicant User @relation("JobApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, applicantId])
+  @@index([applicantId])
+  @@index([jobId, status])
+  @@map("job_applications")
 }
 
 model Notification {

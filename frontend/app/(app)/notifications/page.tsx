@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, Spinner } from '@/components/ui/Feedback';
 import { notificationsService } from '@/lib/services';
+import { getSocket } from '@/lib/socket';
 import { cn, timeAgo } from '@/lib/utils';
 import type { Notification } from '@/types';
 
@@ -20,6 +21,12 @@ const ICONS: Record<Notification['type'], string> = {
   FOLLOW_ACCEPTED: '✓',
   CALL: '📞',
   MEETING: '🗓',
+  JOB_APPLICATION: '💼',
+  JOB_APPLICATION_UPDATE: '📩',
+  JOB_APPLICATION_ACCEPTED: '🎉',
+  JOB_APPLICATION_REJECTED: '🚫',
+  INTERVIEW_INVITATION: '🗓',
+  JOB_OFFER: '📨',
 };
 
 export default function NotificationsPage() {
@@ -36,6 +43,15 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    const onNew = () => void load();
+    socket.on('notification:new', onNew);
+    return () => {
+      socket.off('notification:new', onNew);
+    };
   }, [load]);
 
   async function markRead(id: string) {
@@ -95,6 +111,17 @@ export default function NotificationsPage() {
               notification.entityId
             ) {
               href = `/post/${notification.entityId}`;
+            }
+            if (
+              (notification.type === 'JOB_APPLICATION' ||
+                notification.type === 'JOB_APPLICATION_UPDATE' ||
+                notification.type === 'JOB_APPLICATION_ACCEPTED' ||
+                notification.type === 'JOB_APPLICATION_REJECTED' ||
+                notification.type === 'INTERVIEW_INVITATION' ||
+                notification.type === 'JOB_OFFER') &&
+              notification.entityId
+            ) {
+              href = `/jobs/${notification.entityId}`;
             }
             return (
               <Link

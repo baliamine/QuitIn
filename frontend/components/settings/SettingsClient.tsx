@@ -26,6 +26,10 @@ export function SettingsClient() {
   const requestedTab = (searchParams.get('tab') || 'profile') as SettingsTab;
   const activeTab: SettingsTab = TABS.includes(requestedTab) ? requestedTab : 'profile';
 
+  useEffect(() => {
+    setTab(activeTab);
+  }, [activeTab]);
+
   const [profile, setProfile] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -359,7 +363,7 @@ export function SettingsClient() {
           </Card>
 
           <Card>
-            <CardHeader title="Blocked people" />
+            <CardHeader title="Blocked users" />
             {blockedUsers.length === 0 ? (
               <p className="text-sm text-subtle">You have not blocked anyone.</p>
             ) : (
@@ -534,6 +538,16 @@ export function SettingsClient() {
 
       {tab === 'profile' && (
         <>
+          <Card>
+            <CardHeader title="Account role" />
+            <p className="text-sm text-foreground">
+              {user.role === 'COMPANY' ? 'Company' : 'Job seeker'}
+            </p>
+            <p className="mt-1 text-xs text-subtle">
+              Your account type is chosen at signup and cannot be changed.
+            </p>
+          </Card>
+
           <Card>
             <CardHeader title="Profile picture" />
             <div className="flex items-center gap-4">

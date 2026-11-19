@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConversationsService } from './conversations.service';
 import { CallsService } from '../calls/calls.service';
 import { SendMessageDto } from './dto/conversation.dto';
+import { NOTIFICATION_NEW, notificationEvents } from '../notifications/notification-events';
 
 function parseCookies(header?: string): Record<string, string> {
   if (!header) return {};
@@ -40,7 +41,7 @@ interface AuthSocket extends Socket {
     credentials: true,
   },
 })
-export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   private readonly logger = new Logger(MessagesGateway.name);
 
   /** userId -> connected socket ids (a user can have several tabs open). */
@@ -56,6 +57,14 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly calls: CallsService,
     private readonly config: ConfigService,
   ) {}
+
+  onModuleInit() {
+    // Notifications are global; forwarding them here lets the socket gateway
+    // stay the single place that talks to connected clients.
+    notificationEvents.on(NOTIFICATION_NEW, (payload: { userId: string; notification: unknown }) => {
+      this.server?.to(`user:${payload.userId}`).emit('notification:new', payload.notification);
+    });
+  }
 
   async handleConnection(client: AuthSocket) {
     try {

@@ -6,12 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
-import { notificationsService } from '@/lib/services';
+import { useToast } from '@/components/ui/Toast';
+import { conversationsService, notificationsService } from '@/lib/services';
+import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/feed', label: 'Feed', icon: HomeIcon },
   { href: '/search', label: 'Search', icon: SearchIcon },
+  { href: '/jobs', label: 'Jobs', icon: BriefcaseIcon },
   { href: '/messages', label: 'Messages', icon: ChatIcon },
   { href: '/assistant', label: 'Assistant', icon: SparkIcon },
 ];
@@ -29,6 +32,15 @@ function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...props}>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function BriefcaseIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...props}>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+      <path d="M3 12h18" />
     </svg>
   );
 }
@@ -57,9 +69,11 @@ function BellIcon(props: React.SVGProps<SVGSVGElement>) {
 
 export function Navbar() {
   const { user, logout } = useAuth();
+  const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +91,52 @@ export function Navbar() {
       clearInterval(interval);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    let active = true;
+    const loadUnreadMessages = async () => {
+      try {
+        const [inbox, archived] = await Promise.all([
+          conversationsService.list(),
+          conversationsService.list({ archived: true }),
+        ]);
+        if (active) {
+          setUnreadMessages(
+            [...inbox.conversations, ...archived.conversations].reduce(
+              (total, conversation) => total + (conversation.unreadCount ?? 0),
+              0,
+            ),
+          );
+        }
+      } catch {
+        // The inbox badge is refreshed again on the next message/read event.
+      }
+    };
+
+    const socket = getSocket();
+    const refresh = () => void loadUnreadMessages();
+    refresh();
+    socket.on('message:new', refresh);
+    socket.on('conversation:read', refresh);
+    return () => {
+      active = false;
+      socket.off('message:new', refresh);
+      socket.off('conversation:read', refresh);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    function onNotification(notification: { actor?: { username: string } | null; message: string }) {
+      setUnread((count) => count + 1);
+      const source = notification.actor ? `@${notification.actor.username} ` : '';
+      toast.info(`New notification: ${source}${notification.message}`);
+    }
+    socket.on('notification:new', onNotification);
+    return () => {
+      socket.off('notification:new', onNotification);
+    };
+  }, [toast]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -100,7 +160,7 @@ export function Navbar() {
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
-              const unreadForItem = item.href === '/messages' ? unread : 0;
+              const unreadForItem = item.href === '/messages' ? unreadMessages : 0;
               return (
                 <Link
                   key={item.href}

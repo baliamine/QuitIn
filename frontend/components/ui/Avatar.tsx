@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { cn, initials } from '@/lib/utils';
 
@@ -19,8 +22,13 @@ const pxSizes = { sm: 32, md: 40, lg: 56, xl: 96 };
 
 export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
   const dimension = pxSizes[size];
+  const [failed, setFailed] = useState(false);
 
-  if (src) {
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (src && !failed) {
     return (
       <Image
         src={src}
@@ -29,6 +37,7 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
         height={dimension}
         className={cn('shrink-0 rounded-full object-cover', sizes[size], className)}
         unoptimized
+        onError={() => setFailed(true)}
       />
     );
   }

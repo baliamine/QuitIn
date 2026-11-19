@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -18,6 +19,8 @@ import {
   ReportUserDto,
 } from './dto/profile.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
+import { Public } from '../common/decorators/public.decorator';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 
 @Controller('users')
 export class UsersController {
@@ -135,6 +138,8 @@ export class UsersController {
     return this.users.reportUser(userId, username, dto.reason, dto.details);
   }
 
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':username')
   getByUsername(@CurrentUser('id') userId: string, @Param('username') username: string) {
     return this.users.getByUsername(username, userId);

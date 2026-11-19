@@ -9,10 +9,14 @@ export function UserCard({
   user,
   showFollow = true,
   currentUsername,
+  followLabel,
+  followingLabel,
 }: {
   user: User;
   showFollow?: boolean;
   currentUsername?: string;
+  followLabel?: string;
+  followingLabel?: string;
 }) {
   const name = user.profile?.headline || user.username;
   return (
@@ -32,7 +36,13 @@ export function UserCard({
         </Link>
       </div>
       {showFollow && user.username !== currentUsername && (
-        <FollowButton username={user.username} initialFollowing={!!user.isFollowing} />
+        <FollowButton
+          username={user.username}
+          initialFollowing={!!user.isFollowing}
+          initialRequested={!!user.isRequested}
+          followLabel={followLabel}
+          followingLabel={followingLabel}
+        />
       )}
     </div>
   );

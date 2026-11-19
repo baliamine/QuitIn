@@ -21,6 +21,7 @@ const PUBLIC_USER_SELECT = {
   id: true,
   email: true,
   username: true,
+  role: true,
   emailVerifiedAt: true,
   lastActiveAt: true,
   createdAt: true,
@@ -114,6 +115,7 @@ export class AuthService {
       data: {
         email,
         username,
+        role: dto.role ?? 'JOBSEEKER',
         passwordHash,
         emailVerifiedAt: autoVerify ? new Date() : null,
         profile: {

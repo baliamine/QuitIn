@@ -100,6 +100,13 @@ export class PostsService {
     return blocks.map((b) => (b.blockerId === userId ? b.blockedId : b.blockerId));
   }
 
+  private async assertCanInteract(userId: string, otherId: string) {
+    if (userId === otherId) return;
+    if ((await this.blockedIds(userId)).includes(otherId)) {
+      throw new ForbiddenException('You can no longer interact with this user');
+    }
+  }
+
   /**
    * Posts visible to `userId`: their own posts, public posts from public
    * profiles, and posts from people they follow (which covers private profiles
@@ -257,6 +264,7 @@ export class PostsService {
       select: { id: true, authorId: true },
     });
     if (!post) throw new NotFoundException('Post not found');
+    await this.assertCanInteract(userId, post.authorId);
 
     const existing = await this.prisma.like.findUnique({
       where: { postId_userId: { postId, userId } },
@@ -418,6 +426,7 @@ export class PostsService {
       select: { id: true, authorId: true },
     });
     if (!post) throw new NotFoundException('Post not found');
+    await this.assertCanInteract(userId, post.authorId);
 
     if (dto.parentId) {
       const parent = await this.prisma.comment.findUnique({
@@ -503,6 +512,7 @@ export class PostsService {
     if (!comment || comment.postId !== postId) {
       throw new NotFoundException('Comment not found');
     }
+    await this.assertCanInteract(userId, comment.authorId);
 
     const existing = await this.prisma.commentLike.findUnique({
       where: { commentId_userId: { commentId, userId } },

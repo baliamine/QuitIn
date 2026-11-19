@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
@@ -24,6 +25,7 @@ import {
 } from './dto/password.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 
 const OAUTH_STATE_COOKIE = 'quitin_oauth_state';
 
@@ -66,10 +68,13 @@ export class AuthController {
     return { success: true };
   }
 
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('me')
   async me(@CurrentUser('id') userId: string) {
-    const user = await this.auth.getMe(userId);
-    return { user };
+    // A guest gets { user: null }; a valid session still resolves the user.
+    if (!userId) return { user: null };
+    return { user: await this.auth.getMe(userId) };
   }
 
   @Public()
