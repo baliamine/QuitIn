@@ -36,7 +36,7 @@ export function AuthShell({
 
           <div className="mt-10 w-full max-w-lg">
             <Image
-              src="/img/jobHunt.png"
+              src="/img/jobHunt03.png"
               alt="Grow your tech career illustrations"
               width={1040}
               height={720}
