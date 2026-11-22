@@ -228,6 +228,23 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
+  @SubscribeMessage('message:pin')
+  async handlePin(
+    @ConnectedSocket() client: AuthSocket,
+    @MessageBody() body: { messageId: string },
+  ) {
+    if (!client.userId || !body?.messageId) return { ok: false };
+    try {
+      const message = await this.conversations.pinMessage(client.userId, body.messageId);
+      this.server
+        .to(`conversation:${message.conversationId}`)
+        .emit('message:updated', message);
+      return { ok: true, message };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
   @SubscribeMessage('message:react')
   async handleReact(
     @ConnectedSocket() client: AuthSocket,

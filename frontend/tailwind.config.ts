@@ -23,11 +23,12 @@ const config: Config = {
         subtle: 'rgb(var(--c-subtle) / <alpha-value>)',
         danger: 'rgb(var(--c-danger) / <alpha-value>)',
         success: 'rgb(var(--c-success) / <alpha-value>)',
-        // Accent stays a fixed blue: it reads well on both themes.
+        // A brighter indigo-blue reads as energetic in both themes without
+        // losing contrast on white buttons.
         accent: {
-          DEFAULT: '#3b82f6',
-          hover: '#2563eb',
-          muted: '#1d4ed8',
+          DEFAULT: '#6366f1',
+          hover: '#4f46e5',
+          muted: '#4338ca',
         },
       },
       fontFamily: {
@@ -50,9 +51,14 @@ const config: Config = {
           from: { opacity: '0' },
           to: { opacity: '1' },
         },
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(12px) scale(0.97)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.15s ease-out',
+        'toast-in': 'toast-in 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },

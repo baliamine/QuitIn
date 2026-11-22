@@ -9,10 +9,18 @@ import {
   IsDateString,
   IsBoolean,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { MessagingPermission, ProfileVisibility } from '@prisma/client';
 
 export class UpdateProfileDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9._-]{3,30}$/, {
+    message: 'Use 3-30 letters, numbers, dots, dashes or underscores',
+  })
+  username?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120)
@@ -32,6 +40,21 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(120)
   company?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  industry?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  companySize?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  foundedYear?: string;
 
   @IsOptional()
   @IsString()

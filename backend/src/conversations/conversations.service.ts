@@ -287,6 +287,7 @@ export class ConversationsService {
       content: message.deletedAt ? '' : message.content,
       deleted: Boolean(message.deletedAt),
       edited: Boolean(message.editedAt),
+      pinned: Boolean(message.pinnedAt),
       reactions,
       replyTo: message.replyTo
         ? {
@@ -453,6 +454,23 @@ export class ConversationsService {
     const updated = await this.prisma.message.update({
       where: { id: messageId },
       data: { deletedAt: new Date(), content: '' },
+      include: MESSAGE_INCLUDE,
+    });
+    return this.serializeMessage(updated);
+  }
+
+  async pinMessage(currentUserId: string, messageId: string) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, deletedAt: true, pinnedAt: true },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.deletedAt) throw new BadRequestException('This message was deleted');
+    await this.assertParticipant(currentUserId, message.conversationId);
+
+    const updated = await this.prisma.message.update({
+      where: { id: messageId },
+      data: { pinnedAt: message.pinnedAt ? null : new Date() },
       include: MESSAGE_INCLUDE,
     });
     return this.serializeMessage(updated);

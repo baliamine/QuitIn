@@ -24,8 +24,8 @@ test.describe('Authentication flow (full stack)', () => {
     await expect(page).toHaveURL(/\/feed$/, { timeout: 15_000 });
     await expect(page.getByText('QUITIN', { exact: true }).first()).toBeVisible();
 
-    // Log out via the user menu.
-    await page.getByRole('button', { name: 'Account menu' }).click();
+    // Log out from the settings section only.
+    await page.goto('/settings?tab=security');
     await page.getByRole('button', { name: 'Log out' }).click();
     await expect(page).toHaveURL(/\/login/);
   });

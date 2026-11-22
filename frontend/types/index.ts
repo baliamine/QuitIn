@@ -72,6 +72,9 @@ export interface Profile {
   location: string | null;
   website?: string | null;
   company?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  foundedYear?: string | null;
   visibility?: ProfileVisibility;
   messagingPermission?: MessagingPermission;
   skills?: Skill[];
@@ -107,6 +110,7 @@ export interface Education {
 export interface User {
   id: string;
   email?: string;
+  pendingEmail?: string | null;
   username: string;
   role?: UserRole;
   name?: string;
@@ -179,6 +183,8 @@ export interface Message {
   edited?: boolean;
   editedAt?: string | null;
   deleted?: boolean;
+  pinned?: boolean;
+  pinnedAt?: string | null;
   sender: PostAuthor;
   attachments?: Attachment[];
   reactions?: Record<string, { count: number; userIds: string[] }>;

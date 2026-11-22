@@ -68,7 +68,7 @@ function BellIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
@@ -237,12 +237,6 @@ export function Navbar() {
                       className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface hover:text-foreground"
                     >
                       Settings
-                    </button>
-                    <button
-                      onClick={() => void logout()}
-                      className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-surface"
-                    >
-                      Log out
                     </button>
                   </div>
                 )}

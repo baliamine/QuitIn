@@ -103,6 +103,11 @@ export class ConversationsController {
     return this.conversations.deleteMessage(userId, messageId);
   }
 
+  @Post('messages/:messageId/pin')
+  pinMessage(@CurrentUser('id') userId: string, @Param('messageId') messageId: string) {
+    return this.conversations.pinMessage(userId, messageId);
+  }
+
   @Post('messages/:messageId/react')
   reactMessage(
     @CurrentUser('id') userId: string,

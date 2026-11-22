@@ -8,8 +8,18 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState, Spinner } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import {
+  ActionMenu,
+  ArchiveIcon,
+  BellOffIcon,
+  InfoIcon,
+  PencilIcon,
+  PinIcon,
+  ReplyIcon,
+  SmileIcon,
+  TrashIcon,
+} from '@/components/ui/ActionMenu';
 import { useCall } from '@/components/calls/CallProvider';
-import { useClickOutside } from '@/hooks/useClickOutside';
 import { conversationsService, uploadService, usersService } from '@/lib/services';
 import { emitWithAck, getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
@@ -69,6 +79,121 @@ function MessageAttachments({ attachments }: { attachments: Attachment[] }) {
   );
 }
 
+interface MessageActionsProps {
+  mine: boolean;
+  pinned?: boolean;
+  pinning?: boolean;
+  onReact: (emoji: string) => void;
+  onReply: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPin: () => void;
+}
+
+function MessageActions({
+  mine,
+  pinned,
+  pinning,
+  onReact,
+  onReply,
+  onEdit,
+  onDelete,
+  onPin,
+}: MessageActionsProps) {
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(event.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEmojiOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [emojiOpen]);
+
+  return (
+    <div
+      ref={emojiRef}
+      className="relative flex shrink-0 items-start self-center opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100"
+    >
+      <ActionMenu
+        label="Message options"
+        side="top"
+        align={mine ? 'right' : 'left'}
+        triggerClassName="rounded-full p-1 text-subtle hover:bg-elevated hover:text-foreground"
+        items={[
+          {
+            label: 'React',
+            icon: <SmileIcon />,
+            onSelect: () => setEmojiOpen(true),
+          },
+          {
+            label: 'Reply',
+            icon: <ReplyIcon />,
+            onSelect: onReply,
+          },
+          {
+            label: pinned ? 'Unpin message' : 'Pin message',
+            icon: <PinIcon />,
+            disabled: pinning,
+            onSelect: onPin,
+          },
+          ...(mine
+            ? [
+                {
+                  label: 'Edit',
+                  icon: <PencilIcon />,
+                  divider: true,
+                  onSelect: onEdit,
+                },
+                {
+                  label: 'Delete',
+                  icon: <TrashIcon />,
+                  danger: true,
+                  onSelect: onDelete,
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      {emojiOpen && (
+        <div
+          className={cn(
+            'absolute bottom-full z-40 mb-1 flex gap-0.5 rounded-full border border-border bg-surface px-1.5 py-1 shadow-xl',
+            mine ? 'right-0' : 'left-0',
+          )}
+        >
+          {QUICK_EMOJI.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                setEmojiOpen(false);
+                onReact(emoji);
+              }}
+              className="rounded-full p-1 text-base transition-transform hover:scale-125"
+              aria-label={`React with ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MessagesClient() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -87,8 +212,7 @@ export function MessagesClient() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
-  const [emojiFor, setEmojiFor] = useState<string | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [pinningId, setPinningId] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [presence, setPresence] = useState<Record<string, boolean>>({});
   const [listQuery, setListQuery] = useState('');
@@ -99,7 +223,7 @@ export function MessagesClient() {
   const [peopleQuery, setPeopleQuery] = useState('');
   const [people, setPeople] = useState<User[]>([]);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [mobileThread, setMobileThread] = useState(false);
 
@@ -108,11 +232,6 @@ export function MessagesClient() {
   const typingTimeout = useRef<number | null>(null);
   const typingActive = useRef(false);
   const handledDeepLink = useRef(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const emojiRef = useRef<HTMLDivElement>(null);
-
-  useClickOutside(menuRef, () => setMenuFor(null), Boolean(menuFor));
-  useClickOutside(emojiRef, () => setEmojiFor(null), Boolean(emojiFor));
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
@@ -464,20 +583,7 @@ export function MessagesClient() {
     const content = editingText.trim();
     if (!content) return;
     try {
-      const socket = getSocket();
-      let updated: Message;
-      if (socket.connected) {
-        const response = await emitWithAck<{ ok: boolean; message?: Message; error?: string }>(
-          'message:edit',
-          { messageId, content },
-        );
-        if (!response?.ok || !response.message) {
-          throw new Error(response?.error || 'Could not edit message');
-        }
-        updated = response.message;
-      } else {
-        updated = await conversationsService.editMessage(messageId, content);
-      }
+      const updated = await conversationsService.editMessage(messageId, content);
       setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
       setEditingId(null);
       setEditingText('');
@@ -486,29 +592,25 @@ export function MessagesClient() {
     }
   }
 
-  async function removeMessage(messageId: string) {
-    setMenuFor(null);
-    setMessageToDelete(messageId);
+  async function togglePin(messageId: string) {
+    if (pinningId) return;
+    setPinningId(messageId);
+    try {
+      const updated = await conversationsService.pinMessage(messageId);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+      toast.success(updated.pinned ? 'Message pinned' : 'Message unpinned');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update pinned message');
+    } finally {
+      setPinningId(null);
+    }
   }
 
   async function confirmDeleteMessage() {
     const messageId = messageToDelete;
     if (!messageId) return;
     try {
-      const socket = getSocket();
-      let updated: Message;
-      if (socket.connected) {
-        const response = await emitWithAck<{ ok: boolean; message?: Message; error?: string }>(
-          'message:delete',
-          { messageId },
-        );
-        if (!response?.ok || !response.message) {
-          throw new Error(response?.error || 'Could not delete message');
-        }
-        updated = response.message;
-      } else {
-        updated = await conversationsService.deleteMessage(messageId);
-      }
+      const updated = await conversationsService.deleteMessage(messageId);
       setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not delete message');
@@ -518,36 +620,27 @@ export function MessagesClient() {
   }
 
   async function react(messageId: string, emoji: string) {
-    setEmojiFor(null);
-    setMenuFor(null);
     try {
-      const socket = getSocket();
-      let updated: Message;
-      if (socket.connected) {
-        const response = await emitWithAck<{ ok: boolean; message?: Message; error?: string }>(
-          'message:react',
-          { messageId, emoji },
-        );
-        if (!response?.ok || !response.message) {
-          throw new Error(response?.error || 'Could not react to message');
-        }
-        updated = response.message;
-      } else {
-        updated = await conversationsService.reactMessage(messageId, emoji);
-      }
+      const updated = await conversationsService.reactMessage(messageId, emoji);
       setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not react to message');
     }
   }
 
-  async function toggleFlag(flag: 'archived' | 'muted') {
-    if (!activeId || !activeConversation) return;
-    const next = flag === 'archived' ? !activeConversation.archived : !activeConversation.muted;
+  async function openConversationDetails(id: string) {
+    await openConversation(id);
+    setInfoOpen(true);
+  }
+
+  async function toggleFlag(flag: 'archived' | 'muted', conversationId = activeId) {
+    const conversation = conversations.find((c) => c.id === conversationId);
+    if (!conversationId || !conversation) return;
+    const next = flag === 'archived' ? !conversation.archived : !conversation.muted;
     try {
-      await conversationsService.update(activeId, { [flag]: next });
+      await conversationsService.update(conversationId, { [flag]: next });
       setConversations((prev) =>
-        prev.map((c) => (c.id === activeId ? { ...c, [flag]: next } : c)),
+        prev.map((c) => (c.id === conversationId ? { ...c, [flag]: next } : c)),
       );
       toast.success(
         flag === 'archived'
@@ -558,26 +651,30 @@ export function MessagesClient() {
             ? 'Notifications muted'
             : 'Notifications unmuted',
       );
-      if (flag === 'archived' && next) {
-        setConversations((prev) => prev.filter((c) => c.id !== activeId));
-        setActiveId(null);
-        setMobileThread(false);
+      if (flag === 'archived') {
+        setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+        if (activeId === conversationId) {
+          setActiveId(null);
+          setMobileThread(false);
+        }
       }
-      setInfoOpen(false);
+      if (infoOpen && activeId === conversationId) setInfoOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not update conversation');
     }
   }
 
-  async function deleteConversation() {
-    if (!activeId) return;
+  async function deleteConversation(conversationId = conversationToDelete) {
+    if (!conversationId) return;
     try {
-      await conversationsService.remove(activeId);
-      setConversations((prev) => prev.filter((c) => c.id !== activeId));
-      setActiveId(null);
-      setMobileThread(false);
+      await conversationsService.remove(conversationId);
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (activeId === conversationId) {
+        setActiveId(null);
+        setMobileThread(false);
+      }
       setInfoOpen(false);
-      setConfirmDelete(false);
+      setConversationToDelete(null);
       toast.success('Conversation deleted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not delete conversation');
@@ -597,6 +694,7 @@ export function MessagesClient() {
 
   const typingName = activeId ? typingUsers[activeId] : undefined;
   const isOnline = other ? Boolean(presence[other.id]) : false;
+  const pinnedMessages = messages.filter((message) => message.pinned && !message.deleted);
 
   return (
     <div className="grid h-[calc(100vh-9.5rem)] gap-4 md:grid-cols-[330px_minmax(0,1fr)]">
@@ -677,59 +775,99 @@ export function MessagesClient() {
               const person = conversation.otherParticipants[0];
               const active = conversation.id === activeId;
               return (
-                <button
+                <div
                   key={conversation.id}
-                  type="button"
-                  onClick={() => void openConversation(conversation.id)}
                   className={cn(
-                    'flex w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition-colors',
+                    'group relative flex items-center border-b border-border/60 transition-colors',
                     active ? 'bg-elevated' : 'hover:bg-elevated/60',
                   )}
                 >
-                  <span className="relative">
-                    <Avatar
-                      src={person?.profile?.avatarUrl}
-                      name={person?.username ?? 'User'}
-                      size="md"
-                    />
-                    <PresenceDot online={Boolean(person && presence[person.id])} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {person?.username ?? 'Unknown'}
-                      </p>
-                      {conversation.lastMessage && (
-                        <span className="shrink-0 text-[10px] text-subtle">
-                          {timeAgo(conversation.lastMessage.createdAt)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <p
-                        className={cn(
-                          'truncate text-xs',
-                          (conversation.unreadCount ?? 0) > 0
-                            ? 'font-medium text-foreground'
-                            : 'text-subtle',
-                        )}
-                      >
-                        {conversation.lastMessage?.deleted
-                          ? 'Message deleted'
-                          : conversation.lastMessage?.content ||
-                            (conversation.lastMessage?.attachments?.length ? '📎 Attachment' : 'No messages yet')}
-                      </p>
-                      <span className="flex shrink-0 items-center gap-1">
-                        {conversation.muted && <span className="text-[10px] text-subtle">🔇</span>}
-                        {(conversation.unreadCount ?? 0) > 0 && (
-                          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
-                            {conversation.unreadCount}
+                  <button
+                    type="button"
+                    onClick={() => void openConversation(conversation.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 pr-11 text-left"
+                  >
+                    <span className="relative">
+                      <Avatar
+                        src={person?.profile?.avatarUrl}
+                        name={person?.username ?? 'User'}
+                        size="md"
+                      />
+                      <PresenceDot online={Boolean(person && presence[person.id])} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {person?.username ?? 'Unknown'}
+                        </p>
+                        {conversation.lastMessage && (
+                          <span className="shrink-0 text-[10px] text-subtle">
+                            {timeAgo(conversation.lastMessage.createdAt)}
                           </span>
                         )}
-                      </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between gap-2">
+                        <p
+                          className={cn(
+                            'flex min-w-0 items-center truncate text-xs',
+                            (conversation.unreadCount ?? 0) > 0
+                              ? 'font-medium text-foreground'
+                              : 'text-subtle',
+                          )}
+                        >
+                          {conversation.lastMessage?.pinned && (
+                            <PinIcon className="mr-1 h-3 w-3 shrink-0 text-accent" />
+                          )}
+                          <span className="truncate">
+                            {conversation.lastMessage?.deleted
+                              ? 'Message deleted'
+                              : conversation.lastMessage?.content ||
+                                (conversation.lastMessage?.attachments?.length
+                                  ? '📎 Attachment'
+                                  : 'No messages yet')}
+                          </span>
+                        </p>
+                        <span className="flex shrink-0 items-center gap-1">
+                          {conversation.muted && <BellOffIcon className="h-3 w-3 text-subtle" />}
+                          {(conversation.unreadCount ?? 0) > 0 && (
+                            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+                              {conversation.unreadCount}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  <ActionMenu
+                    label={`Options for ${person?.username ?? 'conversation'}`}
+                    side="bottom"
+                    triggerClassName="absolute right-2 top-4 rounded-full p-1 text-subtle opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100"
+                    items={[
+                      {
+                        label: 'Conversation details',
+                        icon: <InfoIcon />,
+                        onSelect: () => void openConversationDetails(conversation.id),
+                      },
+                      {
+                        label: conversation.muted ? 'Unmute notifications' : 'Mute notifications',
+                        icon: <BellOffIcon />,
+                        onSelect: () => void toggleFlag('muted', conversation.id),
+                      },
+                      {
+                        label: conversation.archived ? 'Restore conversation' : 'Archive conversation',
+                        icon: <ArchiveIcon />,
+                        onSelect: () => void toggleFlag('archived', conversation.id),
+                      },
+                      {
+                        label: 'Delete conversation',
+                        icon: <TrashIcon />,
+                        danger: true,
+                        divider: true,
+                        onSelect: () => setConversationToDelete(conversation.id),
+                      },
+                    ]}
+                  />
+                </div>
               );
             })
           )}
@@ -820,58 +958,37 @@ export function MessagesClient() {
                     <path d="m15 10 6-3v10l-6-3" strokeLinejoin="round" />
                   </svg>
                 </button>
-                <div className="relative" ref={menuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setMenuFor(menuFor ? null : 'header')}
-                    className="rounded-lg p-2 text-muted transition-colors hover:bg-elevated hover:text-foreground"
-                    aria-label="Conversation options"
-                  >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                      <circle cx="5" cy="12" r="1.7" />
-                      <circle cx="12" cy="12" r="1.7" />
-                      <circle cx="19" cy="12" r="1.7" />
-                    </svg>
-                  </button>
-                  {menuFor === 'header' && (
-                    <div className="absolute right-0 top-10 z-30 w-52 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-xl">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMenuFor(null);
-                          setInfoOpen(true);
-                        }}
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-elevated"
-                      >
-                        Conversation details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void toggleFlag('muted')}
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-elevated"
-                      >
-                        {activeConversation.muted ? 'Unmute notifications' : 'Mute notifications'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void toggleFlag('archived')}
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-elevated"
-                      >
-                        {activeConversation.archived ? 'Restore conversation' : 'Archive conversation'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMenuFor(null);
-                          setConfirmDelete(true);
-                        }}
-                        className="block w-full px-3 py-2 text-left text-sm text-danger hover:bg-elevated"
-                      >
-                        Delete conversation
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <ActionMenu
+                  label="Conversation options"
+                  side="bottom"
+                  triggerClassName="p-2"
+                  items={[
+                    {
+                      label: 'Conversation details',
+                      icon: <InfoIcon />,
+                      onSelect: () => setInfoOpen(true),
+                    },
+                    {
+                      label: activeConversation.muted ? 'Unmute notifications' : 'Mute notifications',
+                      icon: <BellOffIcon />,
+                      onSelect: () => void toggleFlag('muted'),
+                    },
+                    {
+                      label: activeConversation.archived
+                        ? 'Restore conversation'
+                        : 'Archive conversation',
+                      icon: <ArchiveIcon />,
+                      onSelect: () => void toggleFlag('archived'),
+                    },
+                    {
+                      label: 'Delete conversation',
+                      icon: <TrashIcon />,
+                      danger: true,
+                      divider: true,
+                      onSelect: () => setConversationToDelete(activeConversation.id),
+                    },
+                  ]}
+                />
               </div>
             </div>
 
@@ -895,6 +1012,34 @@ export function MessagesClient() {
                 >
                   Clear
                 </button>
+              </div>
+            )}
+
+            {pinnedMessages.length > 0 && !threadQuery && (
+              <div className="mx-3 mt-2 rounded-xl border border-accent/25 bg-accent/5">
+                <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-accent">
+                  <PinIcon className="h-3 w-3" />
+                  Pinned · {pinnedMessages.length}
+                </div>
+                <div className="flex gap-2 overflow-x-auto p-2">
+                  {pinnedMessages.map((message) => (
+                    <button
+                      key={message.id}
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById(`message-${message.id}`)
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }
+                      className="max-w-[240px] shrink-0 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-left text-xs text-muted hover:border-accent/50 hover:text-foreground"
+                    >
+                      <span className="block truncate font-medium text-foreground">
+                        {message.sender.username}
+                      </span>
+                      <span className="block truncate">{message.content || 'Attachment'}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -927,12 +1072,8 @@ export function MessagesClient() {
                       new Date(previous.createdAt).getTime() <
                       5 * 60 * 1000 &&
                     !showDay;
-                  const myReaction = Object.entries(message.reactions ?? {}).find(([, value]) =>
-                    value.userIds.includes(user?.id ?? ''),
-                  )?.[0];
-
                   return (
-                    <div key={message.id}>
+                    <div key={message.id} id={`message-${message.id}`}>
                       {showDay && (
                         <div className="my-4 flex items-center gap-3">
                           <span className="h-px flex-1 bg-border" />
@@ -1003,6 +1144,17 @@ export function MessagesClient() {
                                   mine ? 'rounded-br-md' : 'rounded-bl-md',
                                 )}
                               >
+                                {message.pinned && !message.deleted && (
+                                  <div
+                                    className={cn(
+                                      'mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide',
+                                      mine ? 'text-white/80' : 'text-accent',
+                                    )}
+                                  >
+                                    <PinIcon className="h-3 w-3" />
+                                    Pinned
+                                  </div>
+                                )}
                                 {message.replyTo && (
                                   <div
                                     className={cn(
@@ -1079,88 +1231,22 @@ export function MessagesClient() {
                         </div>
 
                         {!message.deleted && editingId !== message.id && (
-                          <div className="relative flex items-start gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                            <div className="relative" ref={emojiFor === message.id ? emojiRef : undefined}>
-                              <button
-                                type="button"
-                                onClick={() => setMenuFor(menuFor === message.id ? null : message.id)}
-                                className="rounded-full p-1 text-subtle hover:bg-elevated hover:text-foreground"
-                                aria-label="Message options"
-                                title="More"
-                              >
-                                ⋯
-                              </button>
-                              {menuFor === message.id && (
-                                <div className="absolute bottom-8 right-0 z-30 w-40 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-xl">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuFor(null);
-                                      setEmojiFor(message.id);
-                                    }}
-                                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-elevated"
-                                  >
-                                    React
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuFor(null);
-                                      setReplyTo(message);
-                                      document.getElementById('message-composer')?.focus();
-                                    }}
-                                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-elevated"
-                                  >
-                                    Reply
-                                  </button>
-                                  {mine && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setMenuFor(null);
-                                        setEditingId(message.id);
-                                        setEditingText(message.content);
-                                      }}
-                                      className="block w-full px-3 py-1.5 text-left text-xs hover:bg-elevated"
-                                    >
-                                      Edit
-                                    </button>
-                                  )}
-                                  {mine && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void removeMessage(message.id)}
-                                      className="block w-full px-3 py-1.5 text-left text-xs text-danger hover:bg-elevated"
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                              {emojiFor === message.id && (
-                                <div
-                                  className={cn(
-                                    'absolute bottom-8 z-30 flex gap-0.5 rounded-full border border-border bg-surface px-1.5 py-1 shadow-xl',
-                                    mine ? 'right-0' : 'left-0',
-                                  )}
-                                >
-                                  {QUICK_EMOJI.map((emoji) => (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={() => void react(message.id, emoji)}
-                                      className={cn(
-                                        'rounded-full p-1 text-base transition-transform hover:scale-125',
-                                        myReaction === emoji && 'bg-elevated',
-                                      )}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                          <MessageActions
+                            mine={mine}
+                            pinned={message.pinned}
+                            pinning={pinningId === message.id}
+                            onReact={(emoji) => void react(message.id, emoji)}
+                            onReply={() => {
+                              setReplyTo(message);
+                              document.getElementById('message-composer')?.focus();
+                            }}
+                            onEdit={() => {
+                              setEditingId(message.id);
+                              setEditingText(message.content);
+                            }}
+                            onDelete={() => setMessageToDelete(message.id)}
+                            onPin={() => void togglePin(message.id)}
+                          />
                         )}
                       </div>
                     </div>
@@ -1399,7 +1485,7 @@ export function MessagesClient() {
               className="w-full"
               onClick={() => {
                 setInfoOpen(false);
-                setConfirmDelete(true);
+                setConversationToDelete(activeConversation.id);
               }}
             >
               Delete conversation
@@ -1409,14 +1495,14 @@ export function MessagesClient() {
       </Modal>
 
       <Modal
-        open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
+        open={conversationToDelete !== null}
+        onClose={() => setConversationToDelete(null)}
         title="Delete conversation?"
         description="This removes the conversation from your inbox. The other person keeps their copy."
         size="sm"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
+            <Button variant="secondary" onClick={() => setConversationToDelete(null)}>
               Cancel
             </Button>
             <Button variant="danger" onClick={() => void deleteConversation()}>

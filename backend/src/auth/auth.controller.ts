@@ -18,7 +18,9 @@ import { OAuthService, OAuthProvider } from './oauth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import {
+  ChangeEmailDto,
   ChangePasswordDto,
+  ConfirmEmailChangeDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
@@ -116,6 +118,39 @@ export class AuthController {
       throw new BadRequestException('Passwords do not match');
     }
     return this.auth.changePassword(userId, dto.currentPassword, dto.newPassword);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('change-email')
+  changeEmail(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangeEmailDto,
+  ) {
+    return this.auth.changeEmail(userId, dto.email, dto.currentPassword);
+  }
+
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('change-email/confirm')
+  async confirmEmailChange(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ConfirmEmailChangeDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.confirmEmailChange(dto.token);
+    if (userId) {
+      const user = await this.auth.getMe(userId);
+      const token = this.auth.signToken({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      });
+      res.cookie(this.auth.cookieName, token, this.auth.getCookieOptions(false));
+    }
+    return result;
   }
 
   private assertProvider(provider: string): OAuthProvider {

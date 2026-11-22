@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { usersService } from '@/lib/services';
+import { useAuth } from '@/hooks/useAuth';
 
 export function FollowButton({
   username,
@@ -23,6 +24,7 @@ export function FollowButton({
   onChange?: (state: { following: boolean; requested: boolean }) => void;
 }) {
   const toast = useToast();
+  const { refresh } = useAuth();
   const [following, setFollowing] = useState(initialFollowing);
   const [requested, setRequested] = useState(initialRequested);
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,7 @@ export function FollowButton({
       setFollowing(res.following);
       setRequested(res.requested);
       onChange?.({ following: res.following, requested: res.requested });
+      await refresh();
       if (res.requested) toast.info('Follow request sent');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not update follow');

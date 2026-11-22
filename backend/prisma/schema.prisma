@@ -89,6 +89,7 @@ enum ReportStatus {
 enum EmailTokenType {
   VERIFY_EMAIL
   RESET_PASSWORD
+  CHANGE_EMAIL
 }
 
 enum ProfileVisibility {
@@ -123,6 +124,7 @@ enum MeetingStatus {
 model User {
   id              String    @id @default(cuid())
   email           String    @unique
+  pendingEmail    String?   @map("pending_email")
   username        String    @unique
   role            UserRole  @default(JOBSEEKER)
   passwordHash    String    @map("password_hash")
@@ -160,6 +162,7 @@ model User {
   applications    JobApplication[]        @relation("JobApplicant")
 
   @@index([username])
+  @@index([pendingEmail])
   @@map("users")
 }
 
@@ -172,6 +175,9 @@ model Profile {
   location            String?
   website             String?
   company             String?
+  industry            String?
+  companySize         String?             @map("company_size")
+  foundedYear         String?             @map("founded_year")
   visibility          ProfileVisibility   @default(PUBLIC)
   messagingPermission MessagingPermission @default(EVERYONE)
   createdAt           DateTime            @default(now()) @map("created_at")
@@ -439,6 +445,7 @@ model Message {
   readAt         DateTime? @map("read_at")
   editedAt       DateTime? @map("edited_at")
   deletedAt      DateTime? @map("deleted_at")
+  pinnedAt       DateTime? @map("pinned_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -452,6 +459,7 @@ model Message {
   @@index([senderId])
   @@index([replyToId])
   @@index([conversationId, createdAt])
+  @@index([conversationId, pinnedAt])
   @@map("messages")
 }
 

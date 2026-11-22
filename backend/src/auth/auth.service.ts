@@ -20,6 +20,7 @@ import { MailService } from './mail.service';
 const PUBLIC_USER_SELECT = {
   id: true,
   email: true,
+  pendingEmail: true,
   username: true,
   role: true,
   emailVerifiedAt: true,
@@ -36,6 +37,9 @@ const PUBLIC_USER_SELECT = {
       visibility: true,
       messagingPermission: true,
     },
+  },
+  _count: {
+    select: { posts: true, followers: true, following: true },
   },
 } as const;
 
@@ -74,7 +78,11 @@ export class AuthService {
   private async consumeEmailToken(raw: string, type: EmailTokenType) {
     const token = await this.prisma.emailToken.findFirst({
       where: { tokenHash: this.hashToken(raw) },
-      include: { user: { select: { id: true, email: true, username: true } } },
+      include: {
+        user: {
+          select: { id: true, email: true, pendingEmail: true, username: true },
+        },
+      },
     });
     if (!token || token.type !== type || token.usedAt || token.expiresAt < new Date()) {
       throw new BadRequestException('This link is invalid or has expired');
@@ -270,6 +278,110 @@ export class AuthService {
       data: { passwordHash: await bcrypt.hash(newPassword, 12) },
     });
     return { success: true };
+  }
+
+  async changeEmail(userId: string, emailInput: string, currentPassword?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        passwordHash: true,
+        pendingEmail: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+
+    const email = emailInput.toLowerCase().trim();
+    if (email === user.email) {
+      throw new BadRequestException('This is already your email address');
+    }
+
+    const taken = await this.prisma.user.findFirst({
+      where: {
+        id: { not: userId },
+        OR: [{ email }, { pendingEmail: email }],
+      },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException('That email address is already in use');
+
+    if (user.passwordHash) {
+      if (!currentPassword) {
+        throw new BadRequestException('Enter your current password to change your email');
+      }
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) throw new BadRequestException('Your current password is incorrect');
+    } else if (currentPassword) {
+      throw new BadRequestException('This account uses social sign-in and has no password');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { pendingEmail: email },
+    });
+
+    const token = await this.createEmailToken(
+      userId,
+      EmailTokenType.CHANGE_EMAIL,
+      24 * 60 * 60 * 1000,
+    );
+    const sent = await this.mail.sendEmailChangeVerificationEmail(
+      email,
+      user.username,
+      token,
+      user.email,
+    );
+
+    // Local development has no mail provider; apply the change so the flow can
+    // still be tested end to end without external credentials.
+    if (!this.mail.isConfigured) {
+      const applied = await this.confirmEmailChange(token);
+      return { success: true, sent: false, autoApplied: true, email: applied.email };
+    }
+
+    return {
+      success: true,
+      sent,
+      pendingEmail: email,
+      ...(!sent && this.config.get<string>('NODE_ENV') !== 'production' ? { devToken: token } : {}),
+    };
+  }
+
+  async confirmEmailChange(rawToken: string) {
+    const record = await this.consumeEmailToken(rawToken, EmailTokenType.CHANGE_EMAIL);
+    const pendingEmail = record.user.pendingEmail;
+    if (!pendingEmail) {
+      throw new BadRequestException('This email change is no longer valid');
+    }
+
+    const taken = await this.prisma.user.findFirst({
+      where: { email: pendingEmail, id: { not: record.userId } },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException('That email address is already in use');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.updateMany({
+        where: { pendingEmail, id: { not: record.userId } },
+        data: { pendingEmail: null },
+      });
+      await tx.emailToken.deleteMany({
+        where: { userId: record.userId, type: EmailTokenType.CHANGE_EMAIL },
+      });
+      return tx.user.update({
+        where: { id: record.userId },
+        data: {
+          email: pendingEmail,
+          pendingEmail: null,
+          emailVerifiedAt: new Date(),
+        },
+        select: { email: true, username: true },
+      });
+    });
+
+    return { success: true, email: updated.email };
   }
 
   signToken(payload: { id: string; email: string; username: string }) {

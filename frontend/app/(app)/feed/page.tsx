@@ -25,6 +25,12 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [greeting, setGreeting] = useState('Welcome back');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
+  }, []);
 
   const load = useCallback(
     async (nextTab: 'all' | 'mine' = 'all') => {
@@ -73,34 +79,79 @@ export default function FeedPage() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Home</h1>
-            <p className="text-sm text-muted">Updates from your network</p>
+        <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-accent/10 via-surface to-surface p-4 shadow-sm sm:p-5">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full bg-accent/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 left-10 h-32 w-32 rounded-full bg-emerald-500/10 blur-3xl" />
+
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-lg text-white shadow-lg shadow-accent/20">
+                ✦
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+                  Home feed
+                </p>
+                <h1 className="truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                  {greeting}
+                  {user?.username ? `, @${user.username}` : ''}
+                </h1>
+                <p className="mt-0.5 text-sm text-muted">
+                  Catch up with your network and discover what is new today.
+                </p>
+              </div>
+            </div>
+
+            {user && (
+              <div className="grid grid-cols-3 gap-2 sm:min-w-[260px]">
+                {[
+                  { label: 'Posts', value: user._count?.posts ?? 0 },
+                  { label: 'Followers', value: user._count?.followers ?? 0 },
+                  { label: 'Following', value: user._count?.following ?? 0 },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    aria-label={`${stat.value} ${stat.label.toLowerCase()}`}
+                    className="rounded-xl border border-border bg-surface/80 px-2 py-2 text-center backdrop-blur"
+                  >
+                    <p className="text-base font-semibold leading-tight text-foreground">
+                      {stat.value}
+                    </p>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">
+                      {stat.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex rounded-lg border border-border bg-surface p-1">
-            {(
-              [
-                ['all', 'For you'],
-                ['mine', 'Your posts'],
-              ] as ['all' | 'mine', string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTab(value)}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                  tab === value
-                    ? 'bg-elevated text-foreground'
-                    : 'text-muted hover:text-foreground',
-                )}
-              >
-                {label}
-              </button>
-            ))}
+
+          <div className="relative mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <p className="text-xs text-subtle">Choose what you want to see</p>
+            <div className="flex rounded-lg border border-border bg-surface p-1">
+              {(
+                [
+                  ['all', 'For you'],
+                  ['mine', 'Your posts'],
+                ] as ['all' | 'mine', string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    tab === value
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-muted hover:bg-elevated hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
 
         <CreatePost
           onCreated={(post) => {

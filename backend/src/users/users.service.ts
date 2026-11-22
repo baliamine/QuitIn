@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -29,6 +30,20 @@ export const PUBLIC_USER_SELECT = {
   },
 } satisfies Prisma.UserSelect;
 
+const RESERVED_USERNAMES = new Set([
+  'me',
+  'search',
+  'suggestions',
+  'blocked',
+  'followers',
+  'following',
+  'settings',
+  'admin',
+  'api',
+  'login',
+  'register',
+]);
+
 const USER_CARD_SELECT = {
   id: true,
   username: true,
@@ -55,12 +70,57 @@ export class UsersService {
     return profile;
   }
 
+  private normalizeUsername(value: string) {
+    const username = value.toLowerCase().trim();
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+      throw new BadRequestException('Use 3-30 letters, numbers, dots, dashes or underscores');
+    }
+    if (RESERVED_USERNAMES.has(username)) {
+      throw new BadRequestException('This name is reserved');
+    }
+    return username;
+  }
+
+  private async assertJobseeker(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (user?.role === 'COMPANY') {
+      throw new ForbiddenException('Company accounts do not use experience or education entries');
+    }
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const profile = await this.getProfileOrThrow(userId);
-    const { skills, ...rest } = dto;
+    const { skills, username, ...rest } = dto;
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.profile.update({ where: { id: profile.id }, data: rest });
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      const normalizedUsername = username === undefined ? undefined : this.normalizeUsername(username);
+
+      if (normalizedUsername) {
+        const taken = await tx.user.findFirst({
+          where: { username: normalizedUsername, id: { not: userId } },
+          select: { id: true },
+        });
+        if (taken) throw new ConflictException('This username is already taken');
+        await tx.user.update({
+          where: { id: userId },
+          data: { username: normalizedUsername },
+        });
+      }
+
+      await tx.profile.update({
+        where: { id: profile.id },
+        data: {
+          ...rest,
+          ...(user?.role === 'COMPANY' && normalizedUsername ? { company: normalizedUsername } : {}),
+        },
+      });
 
       if (skills) {
         const cleaned = Array.from(
@@ -82,6 +142,7 @@ export class UsersService {
   }
 
   async addExperience(userId: string, dto: ExperienceDto) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     this.assertDates(dto.startDate, dto.endDate);
     return this.prisma.experience.create({
@@ -99,6 +160,7 @@ export class UsersService {
   }
 
   async updateExperience(userId: string, id: string, dto: ExperienceDto) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     const experience = await this.prisma.experience.findUnique({ where: { id } });
     if (!experience || experience.profileId !== profile.id) {
@@ -120,6 +182,7 @@ export class UsersService {
   }
 
   async deleteExperience(userId: string, id: string) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     const experience = await this.prisma.experience.findUnique({ where: { id } });
     if (!experience || experience.profileId !== profile.id) {
@@ -130,6 +193,7 @@ export class UsersService {
   }
 
   async addEducation(userId: string, dto: EducationDto) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     this.assertDates(dto.startDate, dto.endDate);
     return this.prisma.education.create({
@@ -145,6 +209,7 @@ export class UsersService {
   }
 
   async updateEducation(userId: string, id: string, dto: EducationDto) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     const education = await this.prisma.education.findUnique({ where: { id } });
     if (!education || education.profileId !== profile.id) {
@@ -164,6 +229,7 @@ export class UsersService {
   }
 
   async deleteEducation(userId: string, id: string) {
+    await this.assertJobseeker(userId);
     const profile = await this.getProfileOrThrow(userId);
     const education = await this.prisma.education.findUnique({ where: { id } });
     if (!education || education.profileId !== profile.id) {

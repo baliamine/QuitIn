@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import {
+  ActionMenu,
+  CopyIcon,
+  PencilIcon,
+  RefreshIcon,
+  ShareIcon,
+  TrashIcon,
+} from '@/components/ui/ActionMenu';
 import { Spinner } from '@/components/ui/Feedback';
 import { Markdown } from '@/components/ui/Markdown';
 import { Modal } from '@/components/ui/Modal';
@@ -317,6 +325,18 @@ export function AssistantClient() {
     }
   }
 
+  function openRenameDialog(conversation: AiConversation) {
+    setRenameTarget(conversation);
+    setRenameTitle(conversation.title);
+  }
+
+  function openShareDialog(conversation: AiConversation) {
+    setShareTarget(conversation);
+    setShareLink(
+      conversation.shareToken ? absoluteUrl(`/shared/ai/${conversation.shareToken}`) : '',
+    );
+  }
+
   async function copyMessage(content: string) {
     try {
       await navigator.clipboard.writeText(content);
@@ -384,53 +404,43 @@ export function AssistantClient() {
                 <button
                   type="button"
                   onClick={() => void openConversation(conversation.id)}
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 py-2.5 pr-8 text-left"
                 >
-                  <p className="truncate text-sm text-foreground">{conversation.title}</p>
+                  <p className="flex items-center gap-1.5 truncate text-sm text-foreground">
+                    <span className="truncate">{conversation.title}</span>
+                    {conversation.shareEnabled && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    )}
+                  </p>
                   <p className="truncate text-[11px] text-subtle">
                     {conversation.messages?.[0]?.content || 'No messages yet'}
                   </p>
                   <p className="text-[10px] text-subtle">{timeAgo(conversation.updatedAt)}</p>
                 </button>
-                <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRenameTarget(conversation);
-                      setRenameTitle(conversation.title);
-                    }}
-                    className="rounded p-1 text-subtle hover:bg-surface hover:text-foreground"
-                    aria-label="Rename conversation"
-                    title="Rename"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShareTarget(conversation);
-                      setShareLink(
-                        conversation.shareToken
-                          ? absoluteUrl(`/shared/ai/${conversation.shareToken}`)
-                          : '',
-                      );
-                    }}
-                    className="rounded p-1 text-subtle hover:bg-surface hover:text-foreground"
-                    aria-label="Share conversation"
-                    title="Share"
-                  >
-                    ↗
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(conversation)}
-                    className="rounded p-1 text-subtle hover:bg-surface hover:text-danger"
-                    aria-label="Delete conversation"
-                    title="Delete"
-                  >
-                    ×
-                  </button>
-                </div>
+                <ActionMenu
+                  label={`Options for ${conversation.title}`}
+                  side="bottom"
+                  triggerClassName="absolute right-2 top-3 rounded-full p-1 text-subtle opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100"
+                  items={[
+                    {
+                      label: 'Rename',
+                      icon: <PencilIcon />,
+                      onSelect: () => openRenameDialog(conversation),
+                    },
+                    {
+                      label: conversation.shareEnabled ? 'Sharing options' : 'Share',
+                      icon: <ShareIcon />,
+                      onSelect: () => openShareDialog(conversation),
+                    },
+                    {
+                      label: 'Delete',
+                      icon: <TrashIcon />,
+                      danger: true,
+                      divider: true,
+                      onSelect: () => setDeleteTarget(conversation),
+                    },
+                  ]}
+                />
               </div>
             ))
           )}
@@ -474,22 +484,30 @@ export function AssistantClient() {
           </div>
           <div className="flex items-center gap-1">
             {activeConversation && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShareTarget(activeConversation);
-                  setShareLink(
-                    activeConversation.shareToken
-                      ? absoluteUrl(`/shared/ai/${activeConversation.shareToken}`)
-                      : '',
-                  );
-                }}
-                className="rounded-lg p-2 text-muted transition-colors hover:bg-elevated hover:text-foreground"
-                aria-label="Share conversation"
-                title="Share conversation"
-              >
-                ↗
-              </button>
+              <ActionMenu
+                label="Discussion options"
+                side="bottom"
+                triggerClassName="p-2"
+                items={[
+                  {
+                    label: 'Rename discussion',
+                    icon: <PencilIcon />,
+                    onSelect: () => openRenameDialog(activeConversation),
+                  },
+                  {
+                    label: activeConversation.shareEnabled ? 'Sharing options' : 'Share discussion',
+                    icon: <ShareIcon />,
+                    onSelect: () => openShareDialog(activeConversation),
+                  },
+                  {
+                    label: 'Delete discussion',
+                    icon: <TrashIcon />,
+                    danger: true,
+                    divider: true,
+                    onSelect: () => setDeleteTarget(activeConversation),
+                  },
+                ]}
+              />
             )}
             <Button
               size="sm"
@@ -563,32 +581,35 @@ export function AssistantClient() {
                     </div>
                     <div
                       className={cn(
-                        'mt-1 flex items-center gap-2 text-[10px] text-subtle',
+                        'mt-1 flex items-center gap-1.5 text-[10px] text-subtle',
                         mine ? 'justify-end' : 'justify-start',
                       )}
                     >
                       <span>{timeAgo(message.createdAt)}</span>
-                      {!mine && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => void copyMessage(message.content)}
-                            className="opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-                          >
-                            Copy
-                          </button>
-                          {message.id === lastAssistantId && !sending && (
-                            <button
-                              type="button"
-                              onClick={() => void regenerate()}
-                              disabled={regenerating}
-                              className="opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
-                            >
-                              Regenerate
-                            </button>
-                          )}
-                        </>
-                      )}
+                      <ActionMenu
+                        label="Message options"
+                        side="top"
+                        align={mine ? 'right' : 'left'}
+                        triggerClassName="h-6 w-6 rounded-full p-1 text-subtle opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100"
+                        items={[
+                          {
+                            label: 'Copy',
+                            icon: <CopyIcon />,
+                            onSelect: () => void copyMessage(message.content),
+                          },
+                          ...(!mine && message.id === lastAssistantId && !sending
+                            ? [
+                                {
+                                  label: 'Regenerate',
+                                  icon: <RefreshIcon />,
+                                  disabled: regenerating,
+                                  divider: true,
+                                  onSelect: () => void regenerate(),
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>

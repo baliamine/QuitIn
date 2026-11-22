@@ -68,6 +68,17 @@ export const authService = {
       newPassword,
       confirmPassword,
     }),
+  changeEmail: (email: string, currentPassword?: string) =>
+    api.post<{
+      success: boolean;
+      sent: boolean;
+      autoApplied?: boolean;
+      pendingEmail?: string;
+      email?: string;
+      devToken?: string;
+    }>('/auth/change-email', { email, currentPassword }),
+  confirmEmailChange: (token: string) =>
+    api.post<{ success: boolean; email: string }>('/auth/change-email/confirm', { token }),
   oauthUrl: (provider: 'google' | 'facebook') => `${API_ORIGIN}/api/auth/oauth/${provider}`,
 };
 
@@ -257,6 +268,8 @@ export const conversationsService = {
     api.delete<Message>(`/conversations/messages/${messageId}`),
   reactMessage: (messageId: string, emoji: string) =>
     api.post<Message>(`/conversations/messages/${messageId}/react`, { emoji }),
+  pinMessage: (messageId: string) =>
+    api.post<Message>(`/conversations/messages/${messageId}/pin`),
 };
 
 export const notificationsService = {

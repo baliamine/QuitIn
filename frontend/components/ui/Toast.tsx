@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { cn } from '@/lib/utils';
@@ -27,24 +28,42 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
+const TOAST_DURATION = 2800;
+
 let counter = 0;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
+  // One toast at a time. A new action replaces the previous one so alerts never
+  // stack up, and tapping the toast dismisses it immediately.
+  const [item, setItem] = useState<ToastItem | null>(null);
+  const timer = useRef<number | null>(null);
 
-  const remove = useCallback((id: number) => {
-    setItems((current) => current.filter((item) => item.id !== id));
+  const clear = useCallback(() => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
   }, []);
+
+  const remove = useCallback(() => {
+    clear();
+    setItem(null);
+  }, [clear]);
 
   const push = useCallback(
     (kind: ToastKind, message: string) => {
+      clear();
       counter += 1;
-      const id = counter;
-      setItems((current) => [...current.slice(-3), { id, kind, message }]);
-      window.setTimeout(() => remove(id), 4200);
+      setItem({ id: counter, kind, message });
+      timer.current = window.setTimeout(() => {
+        setItem(null);
+        timer.current = null;
+      }, TOAST_DURATION);
     },
-    [remove],
+    [clear],
   );
+
+  useEffect(() => clear, [clear]);
 
   const value = useMemo<ToastContextValue>(
     () => ({
@@ -59,34 +78,40 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:left-auto sm:right-6 sm:items-end">
-        {items.map((item) => (
-          <div
+      {item && (
+        <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(360px,calc(100vw-2rem))] justify-end sm:bottom-6 sm:right-6">
+          <button
             key={item.id}
+            type="button"
             role="status"
+            onClick={remove}
             className={cn(
-              'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur',
+              'animate-toast-in pointer-events-auto flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur-xl transition-transform hover:-translate-y-0.5',
               item.kind === 'success' &&
-                'border-success/30 bg-success/10 text-success',
-              item.kind === 'error' && 'border-danger/30 bg-danger/10 text-danger',
-              item.kind === 'info' && 'border-border bg-surface text-foreground',
+                'border-success/40 bg-success/15 text-success shadow-success/10',
+              item.kind === 'error' && 'border-danger/40 bg-danger/15 text-danger shadow-danger/10',
+              item.kind === 'info' &&
+                'border-accent/40 bg-surface/95 text-foreground shadow-accent/10',
             )}
           >
-            <span aria-hidden className="mt-0.5">
+            <span
+              aria-hidden
+              className={cn(
+                'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                item.kind === 'success' && 'bg-success/20 text-success',
+                item.kind === 'error' && 'bg-danger/20 text-danger',
+                item.kind === 'info' && 'bg-accent/20 text-accent',
+              )}
+            >
               {item.kind === 'success' ? '✓' : item.kind === 'error' ? '!' : 'i'}
             </span>
-            <p className="flex-1 leading-snug">{item.message}</p>
-            <button
-              type="button"
-              aria-label="Dismiss notification"
-              onClick={() => remove(item.id)}
-              className="text-subtle transition-colors hover:text-foreground"
-            >
+            <span className="flex-1 leading-snug">{item.message}</span>
+            <span aria-hidden className="text-subtle transition-colors hover:text-foreground">
               ×
-            </button>
-          </div>
-        ))}
-      </div>
+            </span>
+          </button>
+        </div>
+      )}
     </ToastContext.Provider>
   );
 }

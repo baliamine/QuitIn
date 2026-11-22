@@ -130,9 +130,9 @@ export class MailService {
       `<p>Hi @${username},</p>
        <p>Confirm your email address to finish setting up your QUITIN account.</p>
        <p style="margin:24px 0">
-         <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Verify email</a>
+         <a href="${link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Verify email</a>
        </p>
-       <p>Or paste this link into your browser:<br><span style="color:#60a5fa;word-break:break-all">${link}</span></p>
+       <p>Or paste this link into your browser:<br><span style="color:#818cf8;word-break:break-all">${link}</span></p>
        <p>This link expires in 24 hours.</p>`,
     );
     return this.send({
@@ -143,6 +143,33 @@ export class MailService {
     });
   }
 
+  async sendEmailChangeVerificationEmail(
+    email: string,
+    username: string,
+    token: string,
+    currentEmail?: string,
+  ) {
+    const link = `${this.frontendUrl}/verify-email?type=email_change&token=${encodeURIComponent(token)}`;
+    const html = this.layout(
+      'Confirm your new email',
+      `<p>Hi @${username},</p>
+       <p>Confirm <strong style="color:#818cf8">${email}</strong> as your new QUITIN email address.${
+         currentEmail ? ` We sent this link because a change was requested from ${currentEmail}.` : ''
+       }</p>
+       <p style="margin:24px 0">
+         <a href="${link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Confirm new email</a>
+       </p>
+       <p>Or paste this link into your browser:<br><span style="color:#818cf8;word-break:break-all">${link}</span></p>
+       <p>This link expires in 24 hours. If you did not request it, your current email stays unchanged.</p>`,
+    );
+    return this.send({
+      to: email,
+      subject: 'Confirm your new QUITIN email',
+      html,
+      text: `Confirm your new QUITIN email: ${link}`,
+    });
+  }
+
   async sendPasswordResetEmail(email: string, username: string, token: string) {
     const link = `${this.frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
     const html = this.layout(
@@ -150,9 +177,9 @@ export class MailService {
       `<p>Hi @${username},</p>
        <p>We received a request to reset your QUITIN password.</p>
        <p style="margin:24px 0">
-         <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Choose a new password</a>
+         <a href="${link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Choose a new password</a>
        </p>
-       <p>Or paste this link into your browser:<br><span style="color:#60a5fa;word-break:break-all">${link}</span></p>
+       <p>Or paste this link into your browser:<br><span style="color:#818cf8;word-break:break-all">${link}</span></p>
        <p>This link expires in 1 hour.</p>`,
     );
     return this.send({
